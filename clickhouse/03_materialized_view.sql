@@ -1,0 +1,5 @@
+CREATE MATERIALIZED VIEW logs_mv
+TO logs
+AS
+SELECT *
+FROM logs_kafka;
