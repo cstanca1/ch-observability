@@ -1,47 +1,51 @@
 # ClickHouse Observability Demo
 
-A lightweight **streaming observability pipeline** demonstrating how logs from microservices can be ingested, processed, and analyzed in near-real time using:
+This project demonstrates a **streaming observability pipeline** built with:
 
-* Kafka for event streaming
-* ClickHouse for high-performance analytics
-* Grafana for visualization
-* A synthetic log generator simulating microservices
+* **Kafka** – event streaming
+* **ClickHouse** – high-performance analytics
+* **Grafana** – observability dashboards
+* **Python log generator** – synthetic microservice telemetry
 
-The stack runs locally using Docker Compose and can be started with a single command.
+The system simulates logs produced by microservices and processes them in near-real time for analysis.
+
+The entire stack runs locally using Docker Compose.
 
 ---
 
 # Architecture
 
-The demo implements a simple observability data pipeline.
+The demo implements a simplified observability pipeline.
 
 ```
-Synthetic Services
-        │
-        │ JSON logs
-        ▼
-   Kafka Topic (app_logs)
-        │
-        ▼
-ClickHouse Kafka Engine
-        │
-        ▼
-Materialized View
-        │
-        ▼
-ClickHouse MergeTree Table
-        │
-        ▼
-Grafana Dashboards
+Synthetic Services (Generator)
+          │
+          │ JSON logs
+          ▼
+     Kafka Topic
+       app_logs
+          │
+          ▼
+ClickHouse Kafka Engine Table
+          │
+          ▼
+   Materialized View
+          │
+          ▼
+ ClickHouse MergeTree Table
+          │
+          ▼
+      Grafana
+   Observability UI
 ```
 
-Flow description:
+### Flow description
 
-1. The **log generator** simulates microservice events.
-2. Events are written to **Kafka** (`app_logs` topic).
-3. ClickHouse reads the stream through a **Kafka engine table**.
-4. A **materialized view** continuously inserts records into the analytics table.
-5. Grafana queries ClickHouse for observability dashboards.
+1. The **log generator** simulates application logs.
+2. Logs are sent to **Kafka** (`app_logs` topic).
+3. ClickHouse consumes Kafka messages through a **Kafka engine table**.
+4. A **materialized view** inserts events into the analytics table.
+5. Grafana queries ClickHouse for dashboards.
 
 ---
 
@@ -76,11 +80,11 @@ ch-observability
 
 # Components
 
-## Synthetic Log Generator
+## Log Generator
 
-A small Python application that produces realistic microservice logs.
+A Python application that simulates microservice telemetry.
 
-Each event contains:
+Each log event contains:
 
 ```
 timestamp
@@ -88,6 +92,8 @@ service
 log level
 latency
 message
+status code
+incident mode
 ```
 
 Example event:
@@ -98,17 +104,17 @@ Example event:
   "service": "checkout",
   "level": "INFO",
   "latency_ms": 231.4,
-  "message": "demo event"
+  "status_code": 200,
+  "message": "checkout completed",
+  "incident_mode": "normal"
 }
 ```
-
-Events are produced continuously and sent to Kafka.
 
 ---
 
 ## Kafka
 
-Kafka acts as the **streaming buffer** between applications and analytics.
+Kafka acts as the **streaming backbone**.
 
 Topic created automatically:
 
@@ -118,19 +124,17 @@ app_logs
 
 Kafka provides:
 
-* durability
-* streaming ingestion
-* decoupling between producers and consumers
+* buffering
+* decoupling between producer and analytics
+* scalable streaming ingestion
 
 ---
 
 ## ClickHouse
 
-ClickHouse consumes events directly from Kafka using the **Kafka table engine**.
+ClickHouse performs the analytical processing.
 
-Tables:
-
-### Raw analytics table
+### Raw table
 
 ```
 logs
@@ -142,7 +146,9 @@ Engine:
 MergeTree
 ```
 
-Used for analytical queries.
+Stores events for analytics queries.
+
+---
 
 ### Kafka ingestion table
 
@@ -156,7 +162,9 @@ Engine:
 Kafka
 ```
 
-Reads messages from Kafka.
+Consumes messages from the Kafka topic.
+
+---
 
 ### Materialized view
 
@@ -170,12 +178,12 @@ Continuously inserts Kafka events into `logs`.
 
 ## Grafana
 
-Grafana connects to ClickHouse and allows creation of dashboards for:
+Grafana connects to ClickHouse and visualizes:
 
 * service traffic
 * latency distribution
 * error rates
-* system health
+* incident behavior
 
 ---
 
@@ -187,7 +195,7 @@ You need:
 * Docker Compose
 * Git
 
-Test installation:
+Verify installation:
 
 ```
 docker version
@@ -226,7 +234,7 @@ generator
 
 # Access the Services
 
-Grafana
+### Grafana
 
 ```
 http://localhost:3000
@@ -238,7 +246,9 @@ Login:
 admin / admin
 ```
 
-ClickHouse HTTP interface
+---
+
+### ClickHouse HTTP interface
 
 ```
 http://localhost:8123
@@ -258,7 +268,7 @@ You should see events being produced.
 
 ---
 
-## 2. Check Kafka topic creation
+## 2. Verify Kafka topic creation
 
 ```
 docker compose logs kafka-init
@@ -275,12 +285,12 @@ Kafka topic app_logs created
 ## 3. Check ClickHouse tables
 
 ```
-docker compose exec clickhouse \
-clickhouse-client --user default --password clickhouse \
---query "SHOW TABLES"
+docker compose exec clickhouse clickhouse-client \
+  --user default --password clickhouse \
+  --query "SHOW TABLES"
 ```
 
-Expected:
+Expected tables:
 
 ```
 logs
@@ -290,39 +300,278 @@ logs_mv
 
 ---
 
-## 4. Verify data ingestion
+## 4. Verify ingestion
 
 ```
-docker compose exec clickhouse \
-clickhouse-client --user default --password clickhouse \
---query "SELECT count() FROM logs"
+docker compose exec clickhouse clickhouse-client \
+  --user default --password clickhouse \
+  --query "SELECT count() FROM logs"
 ```
 
-The count should increase continuously.
+The count should continuously increase.
+
+---
+
+# Incident Simulation Modes
+
+The generator supports **multiple incident simulation modes**.
+
+Modes are controlled through the `INCIDENT_MODE` environment variable in `docker-compose.yml`.
+
+Example:
+
+```
+INCIDENT_MODE: "normal"
+```
+
+Available modes:
+
+```
+normal
+latency_spike
+auth_failure
+recovery
+```
+
+---
+
+# Mode Overview
+
+## Normal
+
+Represents healthy system behavior.
+
+Characteristics:
+
+* balanced traffic across services
+* low error rates
+* stable latency
+
+---
+
+## Latency Spike
+
+Simulates a performance degradation affecting **checkout**.
+
+Effects:
+
+* checkout latency increases significantly
+* error rate rises
+* traffic biased toward checkout
+
+---
+
+## Auth Failure
+
+Simulates authentication problems affecting **auth**.
+
+Effects:
+
+* login failures increase
+* HTTP errors such as:
+
+```
+401
+403
+429
+500
+```
+
+become more frequent.
+
+---
+
+## Recovery
+
+Represents partial system recovery.
+
+Effects:
+
+* latency improves
+* error rates decline
+* system stabilizes gradually
+
+---
+
+# Running Each Mode
+
+## Normal Mode
+
+Edit `docker-compose.yml`:
+
+```
+INCIDENT_MODE: "normal"
+```
+
+Restart generator:
+
+```
+docker compose up --build -d generator
+```
+
+Query service summary:
+
+```
+SELECT
+  service,
+  count() AS events,
+  countIf(level='ERROR') AS errors,
+  round(avg(latency_ms),2) AS avg_latency,
+  round(quantile(0.95)(latency_ms),2) AS p95_latency
+FROM logs
+GROUP BY service
+ORDER BY service
+```
+
+---
+
+## Latency Spike Mode
+
+Set:
+
+```
+INCIDENT_MODE: "latency_spike"
+```
+
+Restart generator:
+
+```
+docker compose up --build -d generator
+```
+
+Query latency:
+
+```
+SELECT
+ service,
+ round(avg(latency_ms),2) AS avg_latency,
+ round(quantile(0.95)(latency_ms),2) AS p95_latency
+FROM logs
+GROUP BY service
+ORDER BY avg_latency DESC
+```
+
+Expected:
+
+```
+checkout latency >> other services
+```
+
+---
+
+## Auth Failure Mode
+
+Set:
+
+```
+INCIDENT_MODE: "auth_failure"
+```
+
+Restart generator:
+
+```
+docker compose up --build -d generator
+```
+
+Query error codes:
+
+```
+SELECT
+ service,
+ status_code,
+ count()
+FROM logs
+WHERE level='ERROR'
+GROUP BY service,status_code
+ORDER BY service
+```
+
+Expected:
+
+```
+auth service dominates errors
+```
+
+---
+
+## Recovery Mode
+
+Set:
+
+```
+INCIDENT_MODE: "recovery"
+```
+
+Restart generator:
+
+```
+docker compose up --build -d generator
+```
+
+Query recovery trend:
+
+```
+SELECT
+ service,
+ round(avg(latency_ms),2) AS latency,
+ countIf(level='ERROR') AS errors
+FROM logs
+GROUP BY service
+ORDER BY service
+```
+
+Expected:
+
+* latency decreases
+* errors decline
+
+---
+
+# Timeline Analysis
+
+Use this query to observe incidents over time.
+
+```
+SELECT
+ toStartOfMinute(ts) AS minute,
+ service,
+ countIf(level='ERROR') AS errors,
+ round(avg(latency_ms),2) AS latency
+FROM logs
+GROUP BY minute, service
+ORDER BY minute DESC
+LIMIT 100
+```
+
+This helps visualize:
+
+* incident start
+* peak degradation
+* recovery trend
 
 ---
 
 # Useful Commands
 
-Start stack
+Start stack:
 
 ```
 docker compose up --build -d
 ```
 
-View logs
+View logs:
 
 ```
 docker compose logs -f
 ```
 
-Stop stack
+Stop stack:
 
 ```
 docker compose down
 ```
 
-Clean environment
+Clean environment:
 
 ```
 docker compose down -v
@@ -332,9 +581,9 @@ docker compose down -v
 
 # Troubleshooting
 
-## Generator cannot connect to Kafka
+### Generator cannot connect to Kafka
 
-Check Kafka is running:
+Check containers:
 
 ```
 docker compose ps
@@ -348,17 +597,15 @@ docker compose restart generator
 
 ---
 
-## ClickHouse shows zero rows
+### ClickHouse shows zero rows
 
-Verify materialized view exists:
+Check tables:
 
 ```
 SHOW TABLES
 ```
 
-Verify Kafka topic exists.
-
-Restart stack if needed:
+Restart stack:
 
 ```
 docker compose down -v
@@ -369,17 +616,16 @@ docker compose up --build
 
 # Future Improvements
 
-Planned enhancements:
+Planned enhancements include:
 
-* realistic microservice simulation
-* traffic bursts
-* failure injection
-* latency spike simulation
+* realistic microservice traffic patterns
+* cascading failure simulation
 * ClickHouse rollup tables
 * Grafana dashboards
-* OpenTelemetry compatibility
+* OpenTelemetry integration
+* distributed tracing simulation
 
-These will transform this project into a full **observability architecture demo**.
+These improvements will transform the project into a **full observability architecture demo**.
 
 ---
 

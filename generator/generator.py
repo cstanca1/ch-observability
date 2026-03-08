@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import time
 from datetime import datetime
@@ -6,10 +7,35 @@ from datetime import datetime
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 
-services = ["auth", "checkout", "catalog", "payment"]
+SERVICES = ["auth", "checkout", "catalog", "payment"]
+INCIDENT_MODE = os.getenv("INCIDENT_MODE", "normal").strip().lower()
+LOG_INTERVAL_SECONDS = float(os.getenv("LOG_INTERVAL_SECONDS", "0.5"))
+
+SERVICE_PROFILES = {
+    "auth": {
+        "base_latency_ms": 80,
+        "error_rate": 0.01,
+        "messages": ["login success", "token refresh", "session validated"],
+    },
+    "checkout": {
+        "base_latency_ms": 220,
+        "error_rate": 0.02,
+        "messages": ["cart priced", "checkout completed", "order submitted"],
+    },
+    "catalog": {
+        "base_latency_ms": 60,
+        "error_rate": 0.005,
+        "messages": ["search executed", "product page viewed", "inventory checked"],
+    },
+    "payment": {
+        "base_latency_ms": 140,
+        "error_rate": 0.015,
+        "messages": ["payment authorized", "payment captured", "fraud check passed"],
+    },
+}
 
 
-def create_producer():
+def create_producer() -> KafkaProducer:
     while True:
         try:
             producer = KafkaProducer(
@@ -23,18 +49,102 @@ def create_producer():
             time.sleep(5)
 
 
-producer = create_producer()
+def choose_service() -> str:
+    if INCIDENT_MODE == "latency_spike":
+        # bias traffic toward checkout during the incident
+        return random.choices(
+            population=SERVICES,
+            weights=[2, 5, 2, 2],
+            k=1,
+        )[0]
 
-while True:
-    event = {
+    if INCIDENT_MODE == "auth_failure":
+        # bias traffic toward auth during the incident
+        return random.choices(
+            population=SERVICES,
+            weights=[5, 2, 2, 2],
+            k=1,
+        )[0]
+
+    return random.choice(SERVICES)
+
+
+def apply_incident_profile(service: str, base_latency_ms: float, base_error_rate: float):
+    latency_ms = random.gauss(base_latency_ms, base_latency_ms * 0.15)
+    error_rate = base_error_rate
+    message_suffix = ""
+    status_code = 200
+
+    if INCIDENT_MODE == "latency_spike" and service == "checkout":
+        latency_ms = random.gauss(2200, 450)
+        error_rate = 0.18
+        message_suffix = " - upstream dependency slow"
+
+    elif INCIDENT_MODE == "auth_failure" and service == "auth":
+        latency_ms = random.gauss(350, 80)
+        error_rate = 0.35
+        message_suffix = " - token validation failures"
+
+    elif INCIDENT_MODE == "recovery":
+        latency_ms = random.gauss(base_latency_ms * 1.15, base_latency_ms * 0.12)
+        error_rate = max(base_error_rate * 1.5, 0.01)
+        message_suffix = " - recovering"
+
+    is_error = random.random() < error_rate
+    level = "ERROR" if is_error else random.choices(
+        population=["INFO", "WARN"],
+        weights=[9, 1],
+        k=1,
+    )[0]
+
+    if is_error:
+        if service == "auth":
+            status_code = random.choice([401, 403, 429, 500])
+        elif service == "checkout":
+            status_code = random.choice([500, 502, 503, 504])
+        elif service == "payment":
+            status_code = random.choice([500, 502])
+        else:
+            status_code = random.choice([500, 503])
+
+    latency_ms = max(latency_ms, 5.0)
+    return round(latency_ms, 2), level, status_code, message_suffix
+
+
+def build_event() -> dict:
+    service = choose_service()
+    profile = SERVICE_PROFILES[service]
+
+    latency_ms, level, status_code, message_suffix = apply_incident_profile(
+        service=service,
+        base_latency_ms=profile["base_latency_ms"],
+        base_error_rate=profile["error_rate"],
+    )
+
+    message = random.choice(profile["messages"]) + message_suffix
+
+    return {
         "ts": datetime.utcnow().isoformat(timespec="milliseconds"),
-        "service": random.choice(services),
-        "level": random.choice(["INFO", "WARN", "ERROR"]),
-        "latency_ms": random.random() * 1000,
-        "message": "demo event",
+        "service": service,
+        "level": level,
+        "latency_ms": latency_ms,
+        "message": message,
+        "status_code": status_code,
+        "incident_mode": INCIDENT_MODE,
     }
 
-    producer.send("app_logs", event)
-    producer.flush()
-    print(event)
-    time.sleep(0.5)
+
+def main():
+    print(f"Starting generator with INCIDENT_MODE={INCIDENT_MODE}")
+    producer = create_producer()
+
+    while True:
+        event = build_event()
+        producer.send("app_logs", event)
+        producer.flush()
+        print(event)
+        time.sleep(LOG_INTERVAL_SECONDS)
+
+
+if __name__ == "__main__":
+    main()

@@ -52,3 +52,6 @@ services:
       context: ./generator
     depends_on:
       - kafka-init
+    environment:
+      INCIDENT_MODE: "latency_spike"
+      LOG_INTERVAL_SECONDS: "0.5"
