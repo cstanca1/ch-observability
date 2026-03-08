@@ -1,6 +1,6 @@
 CREATE TABLE logs
 (
-ts DateTime,
+ts DateTime64(3),
 service String,
 level String,
 latency_ms Float32,

@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-sleep 15
+echo "Waiting for Kafka..."
+
+cub kafka-ready -b kafka:9092 1 40
 
 kafka-topics \
   --create \
