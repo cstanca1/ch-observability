@@ -1,6 +1,3 @@
----
-
-````markdown
 # ClickHouse Observability Demo
 
 A self-contained **streaming observability pipeline demo** using:
@@ -14,7 +11,7 @@ The project demonstrates how modern observability platforms ingest logs, analyze
 
 ---
 
-# 30-Second Demo
+# 30-Second Observability Demo
 
 Run the entire observability stack locally.
 
@@ -565,4 +562,3 @@ Extend to multi-node ClickHouse.
 # License
 
 MIT
-````
