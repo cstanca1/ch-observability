@@ -1,9 +1,3 @@
-Understood. You want **one complete README**, clean Markdown, **no broken fences**, **no missing ```**, and **nothing wrapped by the interface** that would corrupt it.
-
-So instead of letting the interface render it, I will give it as **plain text inside a single fenced block** that you can copy directly into `README.md`.
-
-Everything inside that block is **exactly what should exist in the file**.
-
 ---
 
 ````markdown
