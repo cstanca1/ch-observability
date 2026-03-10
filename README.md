@@ -1,30 +1,398 @@
+Understood. You want **one complete README**, clean Markdown, **no broken fences**, **no missing ```**, and **nothing wrapped by the interface** that would corrupt it.
+
+So instead of letting the interface render it, I will give it as **plain text inside a single fenced block** that you can copy directly into `README.md`.
+
+Everything inside that block is **exactly what should exist in the file**.
+
 ---
 
-# Latency Rollups (p95 / p99 Analytics)
+````markdown
+# ClickHouse Observability Demo
 
-This project now includes **ClickHouse latency rollups** to compute
-**p95 and p99 latency metrics per service per minute**.
+A self-contained **streaming observability pipeline demo** using:
 
-In real observability systems, dashboards rarely query raw logs directly.
-Instead they rely on **pre-aggregated rollup tables** that make percentile
-queries extremely fast.
+- **Kafka** for streaming ingestion
+- **ClickHouse** for high-performance analytics
+- **Grafana** for dashboards
+- **Python log generator** simulating microservice traffic
 
-This demo implements rollups using:
+The project demonstrates how modern observability platforms ingest logs, analyze latency metrics, and visualize system health in near real time.
 
-- ClickHouse **Materialized Views**
-- **AggregatingMergeTree**
-- `quantileState()` / `quantileMerge()` functions
+---
 
-### Extended Architecture
+# 30-Second Demo
+
+Run the entire observability stack locally.
+
+```bash
+git clone https://github.com/cstanca1/ch-observability.git
+cd ch-observability
+docker compose up --build
+```
+
+Open Grafana:
 
 ```
-Generator
-   │
-   ▼
-Kafka
-   │
-   ▼
-ClickHouse Raw Logs
+http://localhost:3000
+```
+
+Login:
+
+```
+admin / admin
+```
+
+You will immediately see:
+
+- Service health dashboards
+- Error analytics
+- Latency metrics
+- Incident simulation
+
+---
+
+# What This Demo Demonstrates
+
+This repository models several real observability patterns used in production systems.
+
+- Streaming telemetry ingestion
+- Microservice log generation
+- Kafka event pipelines
+- ClickHouse analytics
+- Grafana observability dashboards
+- Incident simulation
+- Percentile latency metrics (p95 / p99)
+- Materialized view rollups
+
+---
+
+# Architecture
+
+```
+Synthetic Services
+(Log Generator)
+        │
+        ▼
+      Kafka
+  Streaming Logs
+        │
+        ▼
+ClickHouse Kafka Engine
+        │
+        ▼
+Materialized View
+        │
+        ▼
+ClickHouse Logs Table
+        │
+        ▼
+Latency Rollups (p95 / p99)
+        │
+        ▼
+     Grafana
+Observability Dashboards
+```
+
+---
+
+# Repository Structure
+
+```
+ch-observability
+│
+├── docker-compose.yml
+│
+├── generator
+│   ├── generator.py
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── kafka
+│   └── init-topics.sh
+│
+├── clickhouse
+│   ├── 01_logs_table.sql
+│   ├── 02_kafka_engine.sql
+│   ├── 03_materialized_view.sql
+│   ├── 04_latency_rollup.sql
+│   └── 05_latency_rollup_mv.sql
+│
+├── grafana
+│   ├── provisioning
+│   │   ├── datasources
+│   │   └── dashboards
+│   └── dashboards
+│
+└── Makefile
+```
+
+---
+
+# Requirements
+
+Install:
+
+- Docker Desktop
+- Docker Compose
+- Git
+
+Verify:
+
+```
+docker version
+docker compose version
+```
+
+---
+
+# Starting the Stack
+
+Clone the repository.
+
+```bash
+git clone https://github.com/cstanca1/ch-observability.git
+cd ch-observability
+```
+
+Start the environment.
+
+```bash
+docker compose up --build
+```
+
+---
+
+# Services Started
+
+The following containers will run:
+
+```
+zookeeper
+kafka
+kafka-init
+clickhouse
+grafana
+generator
+```
+
+---
+
+# Accessing the Services
+
+## Grafana
+
+```
+http://localhost:3000
+```
+
+Credentials:
+
+```
+admin / admin
+```
+
+---
+
+## ClickHouse HTTP Interface
+
+```
+http://localhost:8123
+```
+
+---
+
+# Observability Dashboards
+
+Dashboards are **automatically provisioned**.
+
+Included dashboards:
+
+### Service Health
+
+Displays:
+
+- total events
+- average latency
+- error counts
+- service traffic
+
+---
+
+### Incident Timeline
+
+Shows:
+
+- errors per minute
+- latency spikes
+- service behavior over time
+
+---
+
+### Error Analysis
+
+Displays:
+
+- errors by service
+- HTTP status codes
+- top error combinations
+
+---
+
+# Synthetic Log Generator
+
+The generator simulates microservice telemetry.
+
+Each event includes:
+
+```
+timestamp
+service
+log level
+latency
+status code
+incident mode
+```
+
+Example event:
+
+```json
+{
+  "ts": "2026-03-07T21:10:11.223",
+  "service": "checkout",
+  "level": "INFO",
+  "latency_ms": 231.4,
+  "status_code": 200,
+  "incident_mode": "normal"
+}
+```
+
+---
+
+# Incident Simulation
+
+The generator supports several incident scenarios.
+
+Configured via:
+
+```
+INCIDENT_MODE
+```
+
+Available modes:
+
+```
+normal
+latency_spike
+auth_failure
+recovery
+```
+
+---
+
+## Normal Mode
+
+Healthy behavior.
+
+Characteristics:
+
+- balanced traffic
+- low error rates
+- stable latency
+
+---
+
+## Latency Spike
+
+Simulates a performance incident affecting **checkout**.
+
+Effects:
+
+- latency increases
+- error rate rises
+- service degradation
+
+---
+
+## Auth Failure
+
+Simulates authentication problems affecting **auth**.
+
+Typical errors:
+
+```
+401
+403
+429
+500
+```
+
+---
+
+## Recovery
+
+Simulates partial recovery after an incident.
+
+Effects:
+
+- latency improves
+- error rate decreases
+
+---
+
+# Verifying the Pipeline
+
+### Generator logs
+
+```
+docker compose logs -f generator
+```
+
+---
+
+### Kafka topic creation
+
+```
+docker compose logs kafka-init
+```
+
+Expected output:
+
+```
+Kafka topic app_logs created
+```
+
+---
+
+### ClickHouse ingestion
+
+```
+docker compose exec clickhouse clickhouse-client \
+  --user default --password clickhouse \
+  --query "SELECT count() FROM logs"
+```
+
+The count should continuously increase.
+
+---
+
+# Latency Rollups (p95 / p99)
+
+The system includes **ClickHouse latency rollups**.
+
+Rollups provide efficient analytics for latency percentiles.
+
+Implemented using:
+
+- AggregatingMergeTree
+- Materialized Views
+- quantileState / quantileMerge
+
+---
+
+# Rollup Architecture
+
+```
+Raw Logs
    │
    ▼
 Materialized View
@@ -33,113 +401,174 @@ Materialized View
 Latency Rollup Table
    │
    ▼
-Grafana Dashboards
+Grafana Percentile Metrics
 ```
 
 ---
 
-# Applying Schema Changes
-
-Rollup tables are created automatically when ClickHouse initializes.
-
-If you pull a new version of the repository containing schema changes,
-restart the stack with a **clean ClickHouse volume**:
-
-```bash
-docker compose down -v
-docker compose up --build -d
-```
-
-This allows ClickHouse to execute the initialization SQL files located in:
+# Verify Rollup Tables
 
 ```
-clickhouse/
-```
-
----
-
-# Verifying Rollup Tables
-
-Check that the rollup tables were created:
-
-```bash
 docker compose exec clickhouse clickhouse-client \
   --user default --password clickhouse \
   --query "SHOW TABLES"
 ```
 
-Expected output:
+Expected tables:
 
 ```
-logs
-logs_kafka
-logs_mv
 latency_rollup_1m
 latency_rollup_1m_mv
 ```
 
 ---
 
-# Querying Latency Rollups
+# Example Rollup Query
 
-Example query to compute **p95 and p99 latency by service**:
-
-```bash
-docker compose exec clickhouse clickhouse-client \
-  --user default --password clickhouse \
-  --query "
+```sql
 SELECT
   service,
   incident_mode,
-  round(quantileMerge(0.95)(p95_latency_state), 2) AS p95_latency_ms,
-  round(quantileMerge(0.99)(p99_latency_state), 2) AS p99_latency_ms
+  round(quantileMerge(0.95)(p95_latency_state),2) AS p95_latency_ms,
+  round(quantileMerge(0.99)(p99_latency_state),2) AS p99_latency_ms
 FROM latency_rollup_1m
 WHERE minute >= toStartOfMinute(now()) - INTERVAL 5 MINUTE
 GROUP BY service, incident_mode
 ORDER BY p99_latency_ms DESC
-"
-```
-
-Example result:
-
-```
-service    incident_mode   p95_latency_ms   p99_latency_ms
-checkout   latency_spike   420              810
-auth       auth_failure    210              330
-catalog    normal          120              180
 ```
 
 ---
 
-# Why Rollups Matter
+# Useful Commands
 
-Rollups provide several advantages:
+Start environment
 
-- Faster Grafana dashboards
-- Efficient percentile calculations
-- Reduced query load on raw logs
-- More realistic production observability architecture
+```
+docker compose up --build -d
+```
+
+Stop environment
+
+```
+docker compose down
+```
+
+Reset environment
+
+```
+docker compose down -v
+docker compose up --build -d
+```
+
+Follow logs
+
+```
+docker compose logs -f
+```
 
 ---
 
-# Optional Makefile Commands
+# Makefile Commands
 
-The repository also includes convenient Makefile commands.
+Convenience commands:
 
-Reset the environment:
+Start demo
 
-```bash
+```
+make demo
+```
+
+Reset environment
+
+```
 make reset
 ```
 
-Check rollups:
+Check rollups
 
-```bash
+```
 make rollups
 ```
 
-Follow logs:
+View logs
 
-```bash
+```
 make logs
 ```
+
+---
+
+# What This Demo Models
+
+This architecture mirrors patterns used in production observability platforms such as:
+
+- Datadog
+- New Relic
+- Elastic
+- Honeycomb
+- Snowflake Observability workloads
+
+Key concepts demonstrated:
+
+- streaming ingestion
+- real-time analytics
+- percentile metrics
+- observability dashboards
+- incident simulation
+
+---
+
+# Next Steps
+
+Possible enhancements:
+
+### Cascading Failure Simulation
+
+Simulate service dependency failures.
+
+```
+auth → checkout → payments
+```
+
+---
+
+### Service Dependency Graph
+
+Visualize service topology.
+
+---
+
+### Time-Series Dashboards
+
+Use rollup tables for time-series panels.
+
+---
+
+### Traffic Burst Simulation
+
+Generate traffic spikes.
+
+---
+
+### OpenTelemetry Integration
+
+Replace generator with OTEL telemetry.
+
+---
+
+### Distributed Tracing
+
+Simulate spans and trace IDs.
+
+---
+
+### ClickHouse Cluster Mode
+
+Extend to multi-node ClickHouse.
+
+---
+
+# License
+
+MIT
+````
