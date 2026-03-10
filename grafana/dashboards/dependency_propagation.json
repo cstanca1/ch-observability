@@ -1,0 +1,180 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Dependency Impact Summary",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT service, dependency_status, round(avg(latency_ms), 2) AS avg_latency_ms, countIf(level = 'ERROR') AS errors, count() AS events FROM logs WHERE incident_mode = 'cascading_failure' GROUP BY service, dependency_status ORDER BY avg_latency_ms DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Service Dependency Map",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT service, depends_on, dependency_count, dependency_status FROM logs WHERE incident_mode = 'cascading_failure' GROUP BY service, depends_on, dependency_count, dependency_status ORDER BY service"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Errors by Service and Dependency Status",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT service, dependency_status, countIf(level = 'ERROR') AS errors, count() AS total_events, round(countIf(level = 'ERROR') / count(), 3) AS error_rate FROM logs WHERE incident_mode = 'cascading_failure' GROUP BY service, dependency_status ORDER BY errors DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Latency Rollup by Dependency Status (p95 / p99)",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT service, dependency_status, round(quantileMerge(0.95)(p95_latency_state), 2) AS p95_latency_ms, round(quantileMerge(0.99)(p99_latency_state), 2) AS p99_latency_ms FROM latency_rollup_1m WHERE incident_mode = 'cascading_failure' AND minute >= toStartOfMinute(now()) - INTERVAL 15 MINUTE GROUP BY service, dependency_status ORDER BY p99_latency_ms DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Minute-by-Minute Propagation Timeline",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT minute, service, dependency_status, countMerge(event_count_state) AS events, countIfMerge(error_count_state) AS errors, round(avgMerge(avg_latency_state), 2) AS avg_latency_ms, round(quantileMerge(0.95)(p95_latency_state), 2) AS p95_latency_ms, round(quantileMerge(0.99)(p99_latency_state), 2) AS p99_latency_ms FROM latency_rollup_1m WHERE incident_mode = 'cascading_failure' AND minute >= toStartOfMinute(now()) - INTERVAL 30 MINUTE GROUP BY minute, service, dependency_status ORDER BY minute DESC, service"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": [
+    "clickhouse",
+    "dependencies",
+    "cascading-failure",
+    "observability"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "",
+  "title": "Service Dependency Propagation",
+  "version": 1,
+  "weekStart": ""
+}
