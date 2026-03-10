@@ -57,5 +57,5 @@ services:
     depends_on:
       - kafka-init
     environment:
-      INCIDENT_MODE: "latency_spike"
+      INCIDENT_MODE: "cascading_failure"
       LOG_INTERVAL_SECONDS: "0.5"

@@ -6,7 +6,10 @@ CREATE TABLE logs
     latency_ms Float32,
     message String,
     status_code UInt16,
-    incident_mode String
+    incident_mode String,
+    dependency_status String,
+    dependency_count UInt8,
+    depends_on String
 )
 ENGINE = MergeTree
 ORDER BY (service, ts);

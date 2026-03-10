@@ -16,21 +16,25 @@ SERVICE_PROFILES = {
         "base_latency_ms": 80,
         "error_rate": 0.01,
         "messages": ["login success", "token refresh", "session validated"],
+        "depends_on": [],
     },
     "checkout": {
         "base_latency_ms": 220,
         "error_rate": 0.02,
         "messages": ["cart priced", "checkout completed", "order submitted"],
+        "depends_on": ["auth", "catalog"],
     },
     "catalog": {
         "base_latency_ms": 60,
         "error_rate": 0.005,
         "messages": ["search executed", "product page viewed", "inventory checked"],
+        "depends_on": [],
     },
     "payment": {
         "base_latency_ms": 140,
         "error_rate": 0.015,
         "messages": ["payment authorized", "payment captured", "fraud check passed"],
+        "depends_on": ["auth", "checkout"],
     },
 }
 
@@ -51,7 +55,6 @@ def create_producer() -> KafkaProducer:
 
 def choose_service() -> str:
     if INCIDENT_MODE == "latency_spike":
-        # bias traffic toward checkout during the incident
         return random.choices(
             population=SERVICES,
             weights=[2, 5, 2, 2],
@@ -59,14 +62,62 @@ def choose_service() -> str:
         )[0]
 
     if INCIDENT_MODE == "auth_failure":
-        # bias traffic toward auth during the incident
         return random.choices(
             population=SERVICES,
             weights=[5, 2, 2, 2],
             k=1,
         )[0]
 
+    if INCIDENT_MODE == "cascading_failure":
+        return random.choices(
+            population=SERVICES,
+            weights=[5, 4, 2, 4],
+            k=1,
+        )[0]
+
     return random.choice(SERVICES)
+
+
+def cascade_impact(service: str):
+    """
+    Simulate dependency-driven degradation:
+    auth is primary failure source
+    checkout depends on auth
+    payment depends on auth + checkout
+    """
+    added_latency = 0.0
+    added_error_rate = 0.0
+    message_suffix = ""
+    dependency_status = "healthy"
+
+    if INCIDENT_MODE != "cascading_failure":
+        return added_latency, added_error_rate, message_suffix, dependency_status
+
+    if service == "auth":
+        added_latency = random.gauss(350, 90)
+        added_error_rate = 0.30
+        message_suffix = " - identity provider unstable"
+        dependency_status = "root_failure"
+
+    elif service == "checkout":
+        added_latency = random.gauss(900, 180)
+        added_error_rate = 0.16
+        message_suffix = " - auth dependency degraded"
+        dependency_status = "degraded_by_auth"
+
+    elif service == "payment":
+        added_latency = random.gauss(1200, 260)
+        added_error_rate = 0.22
+        message_suffix = " - checkout/auth dependency degraded"
+        dependency_status = "degraded_by_checkout_auth"
+
+    elif service == "catalog":
+        added_latency = random.gauss(40, 12)
+        added_error_rate = 0.01
+        message_suffix = " - indirect pressure"
+        dependency_status = "minor_indirect_pressure"
+
+    return added_latency, added_error_rate, message_suffix, dependency_status
 
 
 def apply_incident_profile(service: str, base_latency_ms: float, base_error_rate: float):
@@ -74,21 +125,32 @@ def apply_incident_profile(service: str, base_latency_ms: float, base_error_rate
     error_rate = base_error_rate
     message_suffix = ""
     status_code = 200
+    dependency_status = "healthy"
 
     if INCIDENT_MODE == "latency_spike" and service == "checkout":
         latency_ms = random.gauss(2200, 450)
         error_rate = 0.18
         message_suffix = " - upstream dependency slow"
+        dependency_status = "degraded"
 
     elif INCIDENT_MODE == "auth_failure" and service == "auth":
         latency_ms = random.gauss(350, 80)
         error_rate = 0.35
         message_suffix = " - token validation failures"
+        dependency_status = "degraded"
 
     elif INCIDENT_MODE == "recovery":
         latency_ms = random.gauss(base_latency_ms * 1.15, base_latency_ms * 0.12)
         error_rate = max(base_error_rate * 1.5, 0.01)
         message_suffix = " - recovering"
+        dependency_status = "recovering"
+
+    elif INCIDENT_MODE == "cascading_failure":
+        extra_latency, extra_error_rate, cascade_suffix, cascade_status = cascade_impact(service)
+        latency_ms += extra_latency
+        error_rate += extra_error_rate
+        message_suffix = cascade_suffix
+        dependency_status = cascade_status
 
     is_error = random.random() < error_rate
     level = "ERROR" if is_error else random.choices(
@@ -99,23 +161,23 @@ def apply_incident_profile(service: str, base_latency_ms: float, base_error_rate
 
     if is_error:
         if service == "auth":
-            status_code = random.choice([401, 403, 429, 500])
+            status_code = random.choice([401, 403, 429, 500, 503])
         elif service == "checkout":
             status_code = random.choice([500, 502, 503, 504])
         elif service == "payment":
-            status_code = random.choice([500, 502])
+            status_code = random.choice([500, 502, 503, 504])
         else:
             status_code = random.choice([500, 503])
 
     latency_ms = max(latency_ms, 5.0)
-    return round(latency_ms, 2), level, status_code, message_suffix
+    return round(latency_ms, 2), level, status_code, message_suffix, dependency_status
 
 
 def build_event() -> dict:
     service = choose_service()
     profile = SERVICE_PROFILES[service]
 
-    latency_ms, level, status_code, message_suffix = apply_incident_profile(
+    latency_ms, level, status_code, message_suffix, dependency_status = apply_incident_profile(
         service=service,
         base_latency_ms=profile["base_latency_ms"],
         base_error_rate=profile["error_rate"],
@@ -131,6 +193,9 @@ def build_event() -> dict:
         "message": message,
         "status_code": status_code,
         "incident_mode": INCIDENT_MODE,
+        "dependency_status": dependency_status,
+        "dependency_count": len(profile["depends_on"]),
+        "depends_on": ",".join(profile["depends_on"]),
     }
 
 

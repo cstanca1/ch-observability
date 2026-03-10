@@ -1,17 +1,17 @@
 # ClickHouse Observability Demo
 
-A self-contained **streaming observability pipeline demo** using:
+A self-contained **streaming observability pipeline demo** showing how modern telemetry systems are built using:
 
-- **Kafka** for streaming ingestion
-- **ClickHouse** for high-performance analytics
-- **Grafana** for dashboards
-- **Python log generator** simulating microservice traffic
+- **Kafka** — streaming ingestion
+- **ClickHouse** — high-performance analytics
+- **Grafana** — observability dashboards
+- **Python synthetic log generator** — simulated microservice telemetry
 
-The project demonstrates how modern observability platforms ingest logs, analyze latency metrics, and visualize system health in near real time.
+The project models how production observability systems ingest logs, compute latency metrics, simulate incidents, and visualize system health in real time.
 
 ---
 
-# 30-Second Observability Demo
+# 30-Second Demo
 
 Run the entire observability stack locally.
 
@@ -36,24 +36,25 @@ admin / admin
 You will immediately see:
 
 - Service health dashboards
+- Incident simulation
 - Error analytics
 - Latency metrics
-- Incident simulation
+- p95/p99 rollups
 
 ---
 
 # What This Demo Demonstrates
 
-This repository models several real observability patterns used in production systems.
+This repository models core observability patterns used in real systems:
 
-- Streaming telemetry ingestion
-- Microservice log generation
-- Kafka event pipelines
+- Streaming log ingestion
+- Microservice telemetry simulation
+- Incident simulation
+- Cascading service failures
 - ClickHouse analytics
 - Grafana observability dashboards
-- Incident simulation
 - Percentile latency metrics (p95 / p99)
-- Materialized view rollups
+- Materialized views and rollups
 
 ---
 
@@ -127,7 +128,7 @@ Install:
 - Docker Compose
 - Git
 
-Verify:
+Verify installation:
 
 ```
 docker version
@@ -136,7 +137,7 @@ docker compose version
 
 ---
 
-# Starting the Stack
+# Starting the Environment
 
 Clone the repository.
 
@@ -145,7 +146,7 @@ git clone https://github.com/cstanca1/ch-observability.git
 cd ch-observability
 ```
 
-Start the environment.
+Start the stack.
 
 ```bash
 docker compose up --build
@@ -155,7 +156,7 @@ docker compose up --build
 
 # Services Started
 
-The following containers will run:
+The following containers run:
 
 ```
 zookeeper
@@ -194,7 +195,7 @@ http://localhost:8123
 
 # Observability Dashboards
 
-Dashboards are **automatically provisioned**.
+Grafana dashboards are **automatically provisioned**.
 
 Included dashboards:
 
@@ -202,8 +203,8 @@ Included dashboards:
 
 Displays:
 
-- total events
-- average latency
+- event throughput
+- latency metrics
 - error counts
 - service traffic
 
@@ -215,7 +216,7 @@ Shows:
 
 - errors per minute
 - latency spikes
-- service behavior over time
+- incident progression
 
 ---
 
@@ -233,7 +234,7 @@ Displays:
 
 The generator simulates microservice telemetry.
 
-Each event includes:
+Each event contains:
 
 ```
 timestamp
@@ -242,6 +243,7 @@ log level
 latency
 status code
 incident mode
+dependency status
 ```
 
 Example event:
@@ -261,9 +263,7 @@ Example event:
 
 # Incident Simulation
 
-The generator supports several incident scenarios.
-
-Configured via:
+The generator supports simulated incidents controlled by:
 
 ```
 INCIDENT_MODE
@@ -276,15 +276,14 @@ normal
 latency_spike
 auth_failure
 recovery
+cascading_failure
 ```
 
 ---
 
 ## Normal Mode
 
-Healthy behavior.
-
-Characteristics:
+Healthy system behavior.
 
 - balanced traffic
 - low error rates
@@ -296,11 +295,9 @@ Characteristics:
 
 Simulates a performance incident affecting **checkout**.
 
-Effects:
-
-- latency increases
-- error rate rises
-- service degradation
+- increased latency
+- increased error rate
+- degraded service performance
 
 ---
 
@@ -321,12 +318,31 @@ Typical errors:
 
 ## Recovery
 
-Simulates partial recovery after an incident.
-
-Effects:
+Simulates partial system recovery.
 
 - latency improves
-- error rate decreases
+- error rates decline
+
+---
+
+## Cascading Failure
+
+Simulates dependency failures across services.
+
+Dependency chain:
+
+```
+auth → checkout → payment
+```
+
+Behavior:
+
+- auth becomes unstable
+- checkout slows down due to auth dependency
+- payment degrades due to checkout failures
+- catalog experiences minor pressure
+
+This models real distributed-system incidents.
 
 ---
 
@@ -346,7 +362,7 @@ docker compose logs -f generator
 docker compose logs kafka-init
 ```
 
-Expected output:
+Expected:
 
 ```
 Kafka topic app_logs created
@@ -362,15 +378,15 @@ docker compose exec clickhouse clickhouse-client \
   --query "SELECT count() FROM logs"
 ```
 
-The count should continuously increase.
+The row count should continuously increase.
 
 ---
 
 # Latency Rollups (p95 / p99)
 
-The system includes **ClickHouse latency rollups**.
+The system includes **ClickHouse rollups** that compute latency percentiles.
 
-Rollups provide efficient analytics for latency percentiles.
+Rollups allow dashboards to query aggregated metrics instead of raw logs.
 
 Implemented using:
 
@@ -426,6 +442,15 @@ FROM latency_rollup_1m
 WHERE minute >= toStartOfMinute(now()) - INTERVAL 5 MINUTE
 GROUP BY service, incident_mode
 ORDER BY p99_latency_ms DESC
+```
+
+Example output:
+
+```
+service    incident_mode   p95_latency_ms   p99_latency_ms
+checkout   latency_spike   420              810
+auth       auth_failure    210              330
+catalog    normal          120              180
 ```
 
 ---
@@ -491,7 +516,7 @@ make logs
 
 # What This Demo Models
 
-This architecture mirrors patterns used in production observability platforms such as:
+This architecture reflects patterns used in real observability platforms such as:
 
 - Datadog
 - New Relic
@@ -503,59 +528,43 @@ Key concepts demonstrated:
 
 - streaming ingestion
 - real-time analytics
-- percentile metrics
-- observability dashboards
+- percentile latency metrics
 - incident simulation
+- distributed system failure propagation
 
 ---
 
 # Next Steps
 
-Possible enhancements:
+Potential improvements:
 
-### Cascading Failure Simulation
+### Cascading Failure Visualization
 
-Simulate service dependency failures.
-
-```
-auth → checkout → payments
-```
-
----
+Grafana dashboard showing dependency impact across services.
 
 ### Service Dependency Graph
 
 Visualize service topology.
 
----
-
 ### Time-Series Dashboards
 
 Use rollup tables for time-series panels.
 
----
-
 ### Traffic Burst Simulation
 
-Generate traffic spikes.
-
----
+Simulate large traffic spikes.
 
 ### OpenTelemetry Integration
 
-Replace generator with OTEL telemetry.
-
----
+Replace synthetic generator with OTEL telemetry.
 
 ### Distributed Tracing
 
-Simulate spans and trace IDs.
-
----
+Add trace IDs and spans.
 
 ### ClickHouse Cluster Mode
 
-Extend to multi-node ClickHouse.
+Run multi-node ClickHouse.
 
 ---
 
