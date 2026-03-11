@@ -1,7 +1,7 @@
 # ClickHouse Observability Demo
 
 <p align="center">
-  <img src="docs/images/architecture.png" width="900">
+  <img src="docs/images/architecture1.png" width="900">
 </p>
 
 **Architecture Overview**
