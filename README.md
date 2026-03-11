@@ -1,10 +1,11 @@
 # ClickHouse Observability Demo
 
+
+# Architecture Overview
+
 <p align="center">
   <img src="docs/images/architecture1.png" width="900">
 </p>
-
-**Architecture Overview**
 
 Synthetic microservice logs are generated and streamed through Kafka into ClickHouse for analytical processing.  
 Latency rollups and incident simulations are visualized through Grafana dashboards.
