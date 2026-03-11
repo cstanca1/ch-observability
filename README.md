@@ -1,4 +1,4 @@
-# ClickHouse Observability Demo
+# Observability Pipeline
 
 
 # Architecture Overview
